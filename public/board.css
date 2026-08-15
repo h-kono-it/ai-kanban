@@ -1,0 +1,547 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0d1b2a;
+  color: #e6edf3;
+  min-height: 100vh;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #1e2d3d;
+}
+
+header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.conn-status {
+  font-size: 12px;
+  color: #7d8590;
+  flex: 1;
+}
+
+.manage-btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.manage-btn:hover {
+  border-color: #58a6ff;
+}
+
+#filter-btn.filter-active {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+/* カンバンの列を横に並べる箱。ビュー切替があるので main 直下ではなく
+   #view-root の中に置かれる（セレクタを main#lists にしないこと）。 */
+#lists {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  align-items: flex-start;
+}
+
+/* ---- ヘッダーのビュー切替と要対応バッジ ---- */
+
+#view-tabs {
+  display: flex;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.view-tab {
+  background: #21262d;
+  border: none;
+  color: #7d8590;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.view-tab:hover {
+  color: #e6edf3;
+}
+
+.view-tab.active {
+  background: #1f6feb;
+  color: #fff;
+}
+
+/* 人間の対応待ち（awaiting_human 列 + 未承認の提案）の件数。0 件のときは hidden 属性で消える。 */
+.awaiting-badge {
+  background: #9e6a03;
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.list {
+  background: #161b22;
+  border: 1px solid #262c36;
+  border-radius: 8px;
+  width: 260px;
+  flex: 0 0 auto;
+  padding: 10px;
+}
+
+.list.drag-over {
+  outline: 2px dashed #58a6ff;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.list-header h2 {
+  font-size: 14px;
+  margin: 0;
+  cursor: text;
+}
+
+.list-header button {
+  background: none;
+  border: none;
+  color: #7d8590;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.list-header button:hover {
+  color: #f85149;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.card {
+  position: relative;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: grab;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.card.dragging {
+  opacity: 0.4;
+}
+
+/* フィルタ非該当カード: タイトルのみ・薄く・コンパクト表示（隠さない） */
+.card-dimmed {
+  opacity: 0.45;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.card:hover {
+  border-color: #58a6ff;
+}
+
+.card-title {
+  padding-right: 16px;
+}
+
+.card-del {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: #7d8590;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.card-del:hover {
+  color: #f85149;
+}
+
+.card-assignees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  line-height: 1.6;
+}
+
+.chip-team {
+  background: #3b2a5c;
+  color: #d5c6ff;
+}
+
+.chip-person {
+  background: #1f3a54;
+  color: #9fd1ff;
+}
+
+.assign-btn {
+  background: none;
+  border: 1px dashed #3d444d;
+  color: #7d8590;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.assign-btn:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.popover {
+  position: fixed;
+  z-index: 50;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 10px;
+  width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.popover-section + .popover-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #262c36;
+}
+
+.popover-heading {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #7d8590;
+  margin-bottom: 4px;
+}
+
+.popover-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.popover-empty {
+  font-size: 12px;
+  color: #7d8590;
+}
+
+.popover-message {
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.popover-cancel-btn {
+  background: none;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.popover-cancel-btn:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.popover-danger-btn {
+  background: #5c2020;
+  border: 1px solid #f85149;
+  color: #ffb3ad;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.popover-danger-btn:hover {
+  background: #f85149;
+  color: #fff;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-box {
+  position: relative;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 20px;
+  width: 560px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-box h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: #7d8590;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  color: #f85149;
+}
+
+.modal-cols {
+  display: flex;
+  gap: 20px;
+}
+
+.modal-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-col h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+  color: #7d8590;
+}
+
+.modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.modal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.modal-row button {
+  background: none;
+  border: none;
+  color: #7d8590;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-row button:hover {
+  color: #f85149;
+}
+
+.modal-team-box {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.modal-team-box .modal-row {
+  background: none;
+  border: none;
+  padding: 0 0 6px;
+}
+
+.modal-team-members {
+  border-top: 1px solid #262c36;
+  padding-top: 6px;
+}
+
+.modal-add-form input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.modal-auto {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #262c36;
+}
+
+.modal-auto h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+  color: #7d8590;
+}
+
+.card-detail-title {
+  cursor: text;
+  padding-right: 24px;
+}
+
+.card-detail-field {
+  margin-bottom: 16px;
+}
+
+.card-detail-label {
+  display: block;
+  font-size: 12px;
+  color: #7d8590;
+  margin-bottom: 6px;
+}
+
+.card-detail-desc {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.card-detail-due-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-detail-due {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+.card-detail-due-clear {
+  background: none;
+  border: 1px solid #30363d;
+  color: #7d8590;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.card-detail-due-clear:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.card-detail-copy {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.card-detail-copy:hover {
+  border-color: #58a6ff;
+}
+
+.card-detail-copy.copied {
+  border-color: #3fb950;
+  color: #3fb950;
+}
+
+.add-card-form,
+.add-list-form {
+  margin-top: 8px;
+}
+
+.add-card-form input,
+.add-list-form input {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.add-list {
+  width: 260px;
+  flex: 0 0 auto;
+}
+
+.add-list input {
+  background: #161b22;
+  border: 1px solid #262c36;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 10px;
+  width: 100%;
+  font-size: 13px;
+}

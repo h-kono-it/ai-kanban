@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    // Node が .ts を直接実行するので、import も拡張子付きで書く。
+    "allowImportingTsExtensions": true,
+    // 型だけの import/export を実行時に残さない（型ストリップ前提のため必須）。
+    "verbatimModuleSyntax": true,
+    // enum / namespace / parameter properties など「消すだけでは済まない」構文を禁じ、
+    // Node のネイティブ型ストリップで確実に動く範囲に閉じ込める。
+    "erasableSyntaxOnly": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

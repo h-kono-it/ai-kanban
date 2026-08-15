@@ -1,0 +1,95 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0d1b2a;
+  color: #e6edf3;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wrap {
+  text-align: center;
+  width: min(640px, 100% - 40px);
+  padding: 24px 0;
+}
+
+/* ---- ボード一覧 ---- */
+
+.empty {
+  color: #7d8590;
+  font-size: 14px;
+}
+
+.board-list {
+  list-style: none;
+  margin: 24px 0;
+  padding: 0;
+  /* 一覧だけは左揃え。中央揃えのままだと行ごとに文字の始点がずれて読みにくい。 */
+  text-align: left;
+}
+
+.board-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #262c36;
+  border-radius: 8px;
+  background: #161b22;
+}
+
+.board-item + .board-item {
+  margin-top: 8px;
+}
+
+.board-item a {
+  color: #58a6ff;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.board-item a:hover {
+  text-decoration: underline;
+}
+
+.board-meta {
+  color: #7d8590;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+form {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+form input {
+  flex: 1;
+  min-width: 0;
+}
+
+input {
+  background: #161b22;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+button {
+  background: #238636;
+  border: none;
+  color: white;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}

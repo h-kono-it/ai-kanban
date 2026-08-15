@@ -1,0 +1,301 @@
+/* ツリービューのスタイル。board.css の配色（背景 #0d1b2a / パネル #161b22 /
+   境界 #262c36 / 薄字 #7d8590 / アクセント #58a6ff）をそのまま引き継ぐ。
+   DOM 構造は public/tree.js が組み立てる。ここのクラス名がその契約。 */
+
+#tree {
+  padding: 16px 20px 64px;
+  max-width: 1100px;
+}
+
+/* ---- 入れ子のリスト ---- */
+
+.tree-root,
+.tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 子の階層は左に寄せた縦線でぶら下がりを示す。padding は行の高さに対して控えめに。 */
+.tree-children {
+  margin-left: 13px;
+  padding-left: 14px;
+  border-left: 1px solid #262c36;
+}
+
+.tree-node.collapsed > .tree-children {
+  display: none;
+}
+
+/* ---- 1行 ---- */
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: grab;
+}
+
+.tree-row:hover {
+  background: #161b22;
+  border-color: #262c36;
+}
+
+.tree-row.dragging {
+  opacity: 0.4;
+}
+
+/* 絞り込みの対象になっている行。カンバン側が今どこを見ているかを示す。 */
+.tree-node.scoped > .tree-row {
+  background: #10243b;
+  border-color: #1f6feb;
+}
+
+/* ---- 開閉トグル ---- */
+
+.tree-toggle {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #7d8590;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.tree-toggle:hover {
+  color: #e6edf3;
+}
+
+/* 葉ノードでも幅を確保しておかないと、行ごとにタイトルの開始位置がずれる。 */
+.tree-toggle.leaf {
+  visibility: hidden;
+  cursor: default;
+}
+
+/* ---- 種別バッジ ---- */
+
+.tree-kind {
+  flex: none;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  color: #7d8590;
+  white-space: nowrap;
+}
+
+.tree-kind.kind-goal {
+  border-color: #8957e5;
+  color: #b487f7;
+}
+
+.tree-kind.kind-feature {
+  border-color: #1f6feb;
+  color: #58a6ff;
+}
+
+/* ---- タイトルと付帯情報 ---- */
+
+.tree-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-title[contenteditable="true"] {
+  white-space: normal;
+  outline: 1px solid #58a6ff;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+/* 子孫の完了数。子を持たない行には出さない。 */
+.tree-progress {
+  flex: none;
+  font-size: 11px;
+  color: #7d8590;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-progress.complete {
+  color: #3fb950;
+}
+
+/* 今どの列にいるか。カンバンを開かなくても状態が分かるように。 */
+.tree-list-badge {
+  flex: none;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #21262d;
+  color: #7d8590;
+  white-space: nowrap;
+}
+
+.tree-list-badge.role-awaiting_human {
+  background: #4a3208;
+  color: #e3b341;
+}
+
+.tree-list-badge.role-done {
+  background: #12341c;
+  color: #3fb950;
+}
+
+.tree-assignees {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+.tree-due {
+  flex: none;
+  font-size: 11px;
+  color: #7d8590;
+}
+
+.tree-due.overdue {
+  color: #f85149;
+}
+
+/* ---- 行のアクション（hover で出す） ---- */
+
+.tree-actions {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+}
+
+.tree-row:hover .tree-actions,
+.tree-row:focus-within .tree-actions {
+  opacity: 1;
+}
+
+/* 承認ボタンだけは常時見えていないと気づけない。提案ノード本体と、
+   配下に提案を抱えている行（＝［配下ごと承認］が押せる行）の両方が対象。 */
+.tree-node.proposed > .tree-row .tree-actions,
+.tree-node.has-proposed > .tree-row .tree-actions {
+  opacity: 1;
+}
+
+.tree-actions button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tree-actions button:hover {
+  border-color: #58a6ff;
+}
+
+.tree-actions button.approve {
+  border-color: #238636;
+  color: #3fb950;
+}
+
+.tree-actions button.approve:hover {
+  background: #238636;
+  color: #fff;
+}
+
+.tree-actions button.reject:hover {
+  border-color: #f85149;
+  color: #f85149;
+}
+
+/* ---- 未承認の提案 ---- */
+
+/* 点線と淡色で「まだ確定していない」ことを示す。カンバンにも出ていない状態。 */
+.tree-node.proposed > .tree-row {
+  border-style: dashed;
+  border-color: #4a3208;
+  background: #171310;
+}
+
+.tree-node.proposed > .tree-row .tree-title,
+.tree-node.proposed > .tree-row .tree-kind {
+  color: #b0a48c;
+}
+
+.tree-node.proposed > .tree-row::before {
+  content: "提案";
+  flex: none;
+  font-size: 10px;
+  color: #e3b341;
+  border: 1px solid #4a3208;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ---- ドラッグ＆ドロップの目印 ---- */
+
+/* 兄弟として上/下に入る場合は線、子にする場合は枠で示す。
+   3種類を見分けられないと「入れ子にしたつもりが並べ替えだった」が起きる。 */
+.tree-row.drop-before {
+  box-shadow: 0 -2px 0 0 #58a6ff;
+}
+
+.tree-row.drop-after {
+  box-shadow: 0 2px 0 0 #58a6ff;
+}
+
+.tree-row.drop-into {
+  border-color: #58a6ff;
+  background: #10243b;
+}
+
+/* ---- 空のとき ---- */
+
+.tree-empty {
+  color: #7d8590;
+  font-size: 14px;
+  padding: 24px 8px;
+  line-height: 1.8;
+}
+
+.tree-empty code {
+  background: #161b22;
+  border: 1px solid #262c36;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+/* ---- 絞り込み中の表示（カンバン側にも出るのでここで定義） ---- */
+
+.scope-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 12px;
+  padding: 8px 12px;
+  background: #10243b;
+  border: 1px solid #1f6feb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.scope-bar button {
+  background: none;
+  border: none;
+  color: #58a6ff;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+}
