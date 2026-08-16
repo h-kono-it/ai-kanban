@@ -48,6 +48,8 @@ curl -s localhost:3000/api/boards/myboard/awaiting
 
 **サーバーは LLM を呼びません。** 細分化の知能はローカルの Claude Code 側にあります。詳細は [API.md](./API.md)。
 
+Claude Code 用の skill を `~/.claude/skills/ai-kanban/` に置いてあります（このリポジトリの外です）。どのプロジェクトで作業していても「カンバンに積んで」で使えるように personal skill にしてあるので、API の使い方や「AI がやらないこと」を変えたときはそちらも直してください。
+
 ## 2段の承認ゲート
 
 AI に作業させる前提なので、人間が判断するポイントが2種類あります。
