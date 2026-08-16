@@ -44,6 +44,11 @@ Cloudflare Workers + Durable Object 版の [my-kanban](../my-kanban) が前身�
 
 **`public/state.js` の `applyOp()` は `src/ops.ts` の `apply()` の鏡像です。** 片方の `Op` の形を変えたら、必ずもう片方も直すこと。
 
+**2つの不変条件を破らないこと。** どちらも「個々の操作は正しいのに、別の経路から破れる」型の穴が実際に開いていました（テストを書いて発見）。`ops.ts` に case を足すときは必ず確認してください。回帰テストは `test/invariants.test.ts` にあります。
+
+1. **親が `proposed` なら子も `proposed`。** `addNode` は親を見て子の `state` 指定を無視し、`approveNode` は祖先を、`unapproveNode` は子孫を巻き込み、`moveNode` は未承認の親の下へ移されたノードを未承認に倒します（`unapproveNode` の Op を続けて配信する形）。
+2. **`completedAt` が入っているなら、そのノードは `role="done"` の列に居る。** `moveCard` は done 列を出るときに落とし、`deleteList` は done 以外の列へ退避するときに落とします。<br>逆（done 列に居るなら `completedAt` が入っている）は**成り立ちません** — `setListRole` で既存の列を後から `done` にした場合、そこに居るノードには完了時刻が入らないためです（役割を変えただけで完了時刻が湧く方が混乱すると判断した）。
+
 ### データモデル
 
 目的・機能・タスクは**すべて `nodes` という1本のツリー**に入り、**カンバンはそのビュー**です。二重管理はありません。
@@ -56,7 +61,7 @@ interface TaskNode {
   title; description;
   listId;                // カンバン列 = ステータス
   childIds; assigneeIds; // 人とチームは同じ id 空間に混在する
-  dueDate; completedAt;  // completedAt は role="done" の列に在る間だけ入る
+  dueDate; completedAt;  // completedAt が入っている ⟹ role="done" の列に居る（逆は不成立。下記の不変条件2を参照）
 }
 ```
 

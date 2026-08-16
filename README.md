@@ -1,5 +1,7 @@
 # ai-kanban
 
+[![CI](https://github.com/h-kono-it/ai-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/h-kono-it/ai-kanban/actions/workflows/ci.yml)
+
 AI との協働を前提にしたツリー型カンバン。ローカルで動く Node + SQLite の1プロセスです。
 
 **ハイレベルな目的を放り込む → ローカルの Claude Code が細分化してツリーに投入する → 人間が承認する → カンバンで進める**、という流れのために作られています。

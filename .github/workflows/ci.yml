@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同じブランチに続けて push したとき、古い run を止めて最新だけ走らせる。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # node:sqlite（stable）と .ts のネイティブ型ストリップを使うので 24 以上が必須。
+          # package.json の engines と揃えること。
+          node-version: "24"
+          cache: npm
+
+      # ビルドステップが無いので、入れるのは依存だけ。
+      - run: npm ci
+
+      # 型チェックとテストは分ける。落ちたときにどちらで落ちたかが一目で分かる。
+      - run: npm run typecheck
+
+      - run: npm test

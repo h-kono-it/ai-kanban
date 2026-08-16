@@ -1,6 +1,10 @@
 // エントリポイント。Hono アプリ + HTTP サーバー + WebSocket の upgrade 処理。
 // `node --disable-warning=ExperimentalWarning src/server.ts` で直接動く（Node 24 の型ストリップ）。
 
+// 副作用 import。他のモジュールが process.env を読む前に .env を読み込む必要があるので
+// 一番上に置くこと（ESM の import は記述順に評価される）。
+import "./env.ts";
+
 import { relative } from "node:path";
 import type { Server } from "node:http";
 import type { Duplex } from "node:stream";

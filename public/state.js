@@ -384,6 +384,8 @@ export function applyOp(op) {
           const node = nodeById(id);
           if (!node) continue;
           node.listId = op.movedToListId;
+          // 退避先が完了列でなければ完了時刻を落とす（サーバーの deleteList と同じ判断）。
+          if (to.role !== "done") node.completedAt = null;
           // proposed は列に載らないので nodeIds には積まない（listId だけ付け替える）。
           if (node.state === "active") to.nodeIds.push(id);
         }

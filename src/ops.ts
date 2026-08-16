@@ -418,8 +418,9 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
 
     case "moveNode": {
       const node = requireNode(db, boardId, intent.id);
+      let newParent: NodeRow | null = null;
       if (intent.parentId !== null) {
-        requireNode(db, boardId, intent.parentId);
+        newParent = requireNode(db, boardId, intent.parentId);
         // 自分自身や子孫を親にすると木が輪になって二度と辿れなくなる。
         if (isSelfOrDescendant(db, boardId, node.id, intent.parentId)) {
           throw new OpError("自分自身または子孫を親にはできません");
@@ -433,7 +434,16 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
       if (oldParentId !== intent.parentId) {
         writeOrder(db, "nodes", "tree_pos", siblingIds(db, boardId, oldParentId));
       }
-      return [{ type: "moveNode", id: node.id, parentId: intent.parentId, treeIndex: placed.index }];
+      const ops: Op[] = [{ type: "moveNode", id: node.id, parentId: intent.parentId, treeIndex: placed.index }];
+
+      // 未承認の親の下へ確定済みのノードを移したら、そのノードも未承認に倒す。
+      // addNode が親を見て state を倒すのと同じ規則で、ここを素通りさせると
+      // 「親が未承認なのに子だけカンバンに並んでいる」状態を作れてしまう。
+      // unapproveNode の Op を続けて配信するので、クライアント側に特別扱いは要らない。
+      if (newParent !== null && newParent.state === "proposed" && node.state === "active") {
+        ops.push(...apply(db, boardId, { type: "unapproveNode", id: node.id }));
+      }
+      return ops;
     }
 
     case "deleteNode": {
@@ -627,7 +637,13 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
       const movedNodeIds = [...activeIds, ...proposedIds];
 
       const now = nowIso();
-      const move = db.prepare("UPDATE nodes SET list_id = ?, updated_at = ? WHERE id = ?");
+      // 退避先が完了列でなければ完了時刻を落とす。「completed_at が入っているなら
+      // そのノードは done 列に居る」を保つため。残したまま通常列へ移すと、あとで
+      // done 列へ入れ直したときに moveCard が古い時刻をそのまま維持してしまう。
+      const move =
+        target.role === "done"
+          ? db.prepare("UPDATE nodes SET list_id = ?, updated_at = ? WHERE id = ?")
+          : db.prepare("UPDATE nodes SET list_id = ?, completed_at = NULL, updated_at = ? WHERE id = ?");
       for (const id of movedNodeIds) move.run(target.id, now, id);
       writeOrder(db, "nodes", "list_pos", [...activeIdsInList(db, boardId, target.id).filter((id) => !activeIds.includes(id)), ...activeIds]);
 
