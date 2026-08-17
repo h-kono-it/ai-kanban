@@ -165,7 +165,7 @@ curl -sX PATCH localhost:3000/api/boards/myboard/nodes/<nodeId> \
 |---|---|
 | `approveNode` | `id` `recursive?` — `proposed` → `active`。**祖先が未承認ならそれも一緒に承認される**（親が未承認なのに子だけ確定する状態を作らないため）。`recursive: true` で配下の提案もすべて承認 |
 | `unapproveNode` | `id` — 承認の取り消し。`active` → `proposed` に戻し、カンバンから外して `completedAt` も落とす。**子孫の確定済みも必ず一緒に戻る**（`approveNode` が祖先を巻き込むのと対称）。削除ではないので、再度 `approveNode` すれば元に戻る |
-| `rejectNode` | `id` — 提案をサブツリーごと削除。`active` なノードには使えない |
+| `rejectNode` | `id` `reason?` — 提案をサブツリーごと削除。`active` なノードには使えない。`reason` を添えると**親の `description` の末尾に `却下 YYYY-MM-DD「タイトル」: 理由` が1行残る**（却下は取り消せないので、なぜ要らないと判断したかを次の細分化に渡すため）。理由の改行は空白に潰して1行に揃える。**親が無いルートに `reason` を添えるとエラー**（追記先が無い。理由なしなら却下できる）。理由は `rejectNode` の Op には載らず、直前に `setNodeDescription` の Op として配信される |
 
 ### カンバン
 

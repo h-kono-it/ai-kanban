@@ -21,7 +21,7 @@ import {
   rerender,
   ui,
 } from "./state.js";
-import { openConfirm, openNodeDetail, toggleAssigneePopover } from "./modals.js";
+import { openConfirm, openNodeDetail, rejectConfirm, toggleAssigneePopover } from "./modals.js";
 import { send } from "./ws.js";
 
 // ---------------------------------------------------------------------------
@@ -372,17 +372,11 @@ function renderActions(node, hasChildren) {
     }
     // 却下はサブツリーごと消えるので必ず確認を挟む。
     const reject = actionButton("却下", "reject", "提案をサブツリーごと削除する", () => {
-      const children = descendantIds(node.id).length;
       openConfirm({
         key: `tree-reject:${node.id}`,
         anchorSelector: `.tree-row[data-node-id="${node.id}"] button.reject`,
         align: "right",
-        message:
-          children > 0
-            ? `提案「${node.title}」を却下しますか？配下 ${children} 件の提案も一緒に削除されます。`
-            : `提案「${node.title}」を却下しますか？`,
-        confirmLabel: "却下",
-        onConfirm: () => send({ type: "rejectNode", id: node.id }),
+        ...rejectConfirm(node),
       });
     });
     actions.append(reject);

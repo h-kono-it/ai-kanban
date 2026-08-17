@@ -225,6 +225,33 @@ function placeholders(count: number): string {
   return new Array(count).fill("?").join(",");
 }
 
+// ---- 却下の墓標 -----------------------------------------------------------
+// 却下したノードは消えるので、理由は親の description に1行だけ残す。
+// 1却下＝1行に揃えてあるので、あとから grep でも目で追うのも楽になる。
+
+/** 墓標の行頭。既存の description の末尾がこの形なら、続けて書いて塊にする。 */
+const REJECT_MEMO_RE = /^却下 \d{4}-\d{2}-\d{2}「/;
+
+/** 却下理由の正規化。1却下1行に保つため、改行は空白に潰す。 */
+function rejectionReason(value: unknown): string {
+  return trimmedText(value).replace(/\s*\n\s*/g, " ");
+}
+
+/** 墓標に添える日付。ローカル実行前提なのでサーバーのローカル日付で書く（UTC だと日本の朝が前日になる）。 */
+function todayLocal(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** 本文の末尾に墓標を足す。本文とは1行空け、墓標同士は続けて並べる。 */
+function appendMemo(description: string, memo: string): string {
+  const body = description.trimEnd();
+  if (!body) return memo;
+  const lastLine = body.slice(body.lastIndexOf("\n") + 1);
+  return `${body}${REJECT_MEMO_RE.test(lastLine) ? "\n" : "\n\n"}${memo}`;
+}
+
 function touchNode(db: Db, id: string, now: string): void {
   db.prepare("UPDATE nodes SET updated_at = ? WHERE id = ?").run(now, id);
 }
@@ -555,8 +582,27 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
     case "rejectNode": {
       const node = requireNode(db, boardId, intent.id);
       if (node.state === "active") throw new OpError("確定済みのノードは却下できません");
+
+      // 却下は取り消せないので、理由を添えられたら親の description に墓標を1行残す。
+      // 追記先を親にするのは、Claude Code が細分化の前に GET /tree で親の本文を読むから
+      // （＝新しい API を増やさずに「前に何を却下したか」を渡せる）。
+      const ops: Op[] = [];
+      const reason = rejectionReason(intent.reason);
+      if (reason) {
+        if (node.parent_id === null) {
+          // ルートには追記先が無い。黙って理由を捨てるのは「判断が消える」というこの機能の
+          // 趣旨そのものを裏切るので、却下ごと止めて呼び出し側に気づかせる。
+          throw new OpError("ルートノードには理由の追記先がありません（親が無いため）。理由なしなら却下できます");
+        }
+        const parent = requireNode(db, boardId, node.parent_id);
+        const memo = `却下 ${todayLocal()}「${node.title}」: ${reason}`;
+        const description = appendMemo(parent.description, memo);
+        ops.push(...apply(db, boardId, { type: "setNodeDescription", id: parent.id, description }));
+      }
+
       const ids = deleteSubtree(db, boardId, node);
-      return [{ type: "rejectNode", ids }];
+      ops.push({ type: "rejectNode", ids });
+      return ops;
     }
 
     // ---- カンバン ---------------------------------------------------------

@@ -271,6 +271,28 @@ header h1 {
   margin-bottom: 10px;
 }
 
+/* ポップオーバー内の入力欄（今のところ却下理由だけ）。 */
+.popover-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #e6edf3;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.popover-input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
 .popover-actions {
   display: flex;
   justify-content: flex-end;

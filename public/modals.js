@@ -429,16 +429,10 @@ function renderProposedField(node) {
   reject.title = "提案をサブツリーごと削除する";
   reject.addEventListener("click", (e) => {
     e.stopPropagation();
-    const children = descendantIds(node.id).length;
     openConfirm({
       key: `reject:${node.id}`,
       anchorSelector: "#detail-reject-btn",
-      message:
-        children > 0
-          ? `提案「${node.title}」を却下しますか？配下 ${children} 件の提案も一緒に削除されます。`
-          : `提案「${node.title}」を却下しますか？`,
-      confirmLabel: "却下",
-      onConfirm: () => send({ type: "rejectNode", id: node.id }),
+      ...rejectConfirm(node),
     });
   });
 
@@ -794,11 +788,37 @@ function renderListsSection() {
  * key が同じボタンをもう一度押したら閉じる（トグル）。
  * anchorSelector は再描画のたびに引き直すので、アンカーが消えたら自動的に閉じる。
  * tree.js の［却下］もこれを使う（サブツリーごと消える操作なので確認を挟む）。
+ *
+ * reasonPlaceholder を渡すと理由の入力欄が付き、onConfirm がその文字列を受け取る
+ * （空なら ""）。打ちかけの内容は data-keep で再描画から守る。
  */
 export function openConfirm(options) {
   if (confirmState && confirmState.key === options.key) confirmState = null;
   else confirmState = options;
   renderConfirmPopover();
+}
+
+/**
+ * 却下確認の中身（message / confirmLabel / reasonPlaceholder / onConfirm）。
+ * ツリー行と詳細モーダルの両方から同じ文面・同じ理由欄で開けるように切り出してある。
+ * key と anchorSelector は呼び出し側が足すこと。
+ *
+ * 理由は親の description に1行残るだけなので、親がいないルートでは欄を出さない
+ * （サーバーも理由付きのルート却下はエラーにする）。
+ */
+export function rejectConfirm(node) {
+  const children = descendantIds(node.id).length;
+  const isRoot = node.parentId === null;
+  const head =
+    children > 0
+      ? `提案「${node.title}」を却下しますか？配下 ${children} 件の提案も一緒に削除されます。`
+      : `提案「${node.title}」を却下しますか？`;
+  return {
+    message: isRoot ? `${head}（最上位なので理由の記録先がありません）` : head,
+    confirmLabel: "却下",
+    reasonPlaceholder: isRoot ? null : "却下する理由（任意・親の説明に残ります）",
+    onConfirm: (reason) => send({ type: "rejectNode", id: node.id, reason: reason || undefined }),
+  };
 }
 
 /** 列削除の確認。anchorSelector 省略時は列ヘッダーの × をアンカーにする。 */
@@ -830,6 +850,8 @@ export function openDeleteListConfirm(listId, anchorSelector) {
 
 function renderConfirmPopover() {
   const existing = document.getElementById("confirm-popover");
+  // 同じ確認が開き続けているときだけ、打ちかけの理由とカーソル位置を引き継ぐ。
+  const snapshot = existing && confirmState && existing.dataset.key === confirmState.key ? captureFields(existing) : null;
   if (existing) existing.remove();
   if (!confirmState) return;
 
@@ -841,7 +863,17 @@ function renderConfirmPopover() {
 
   const pop = el("div", "popover");
   pop.id = "confirm-popover";
+  pop.dataset.key = confirmState.key;
   pop.append(el("div", "popover-message", confirmState.message));
+
+  let reasonField = null;
+  if (confirmState.reasonPlaceholder && confirmState.onConfirm) {
+    reasonField = el("textarea", "popover-input");
+    reasonField.rows = 3;
+    reasonField.placeholder = confirmState.reasonPlaceholder;
+    reasonField.dataset.keep = "confirm-reason";
+    pop.append(reasonField);
+  }
 
   const actions = el("div", "popover-actions");
   const cancel = el("button", "popover-cancel-btn", confirmState.onConfirm ? "キャンセル" : "閉じる");
@@ -857,7 +889,7 @@ function renderConfirmPopover() {
     const danger = el("button", "popover-danger-btn", confirmState.confirmLabel ?? "削除");
     danger.type = "button";
     danger.addEventListener("click", () => {
-      run();
+      run(reasonField ? reasonField.value.trim() : "");
       confirmState = null;
       renderConfirmPopover();
     });
@@ -866,6 +898,9 @@ function renderConfirmPopover() {
   pop.append(actions);
 
   placePopover(pop, anchor, confirmState.align ?? "left");
+  restoreFields(pop, snapshot);
+  // 開いた直後だけ理由欄にカーソルを置く（再描画時は snapshot 側が focus を持っている）。
+  if (reasonField && !snapshot) reasonField.focus();
 }
 
 // ---------------------------------------------------------------------------

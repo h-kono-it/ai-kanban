@@ -157,6 +157,66 @@ test("rejectNode は確定済みノードを拒否し、未承認ならサブツ
   assertPositions(db, boardId, "rejectNode 後");
 });
 
+/** 墓標の日付は ops.ts と同じくローカル日付。 */
+function today(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+test("rejectNode は理由を親の description に墓標として残す（理由なしなら1文字も足さない）", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const goal = addNode(db, boardId, { parentId: null, title: "目的", kind: "goal", description: "なぜやるか" });
+  const opts = { parentId: goal, state: "proposed" as const };
+  const a = addNode(db, boardId, { ...opts, title: "提案A" });
+  const b = addNode(db, boardId, { ...opts, title: "提案B" });
+  const c = addNode(db, boardId, { ...opts, title: "提案C" });
+  const d = addNode(db, boardId, { ...opts, title: "提案D" });
+
+  // 却下されるノードは消えるので、墓標（親の description 更新）が先に配信される必要がある。
+  const ops = apply(db, boardId, { type: "rejectNode", id: a, reason: "スコープ外。\n  今回はやらない" });
+  assert.deepEqual(
+    ops.map((o) => o.type),
+    ["setNodeDescription", "rejectNode"],
+    "墓標の Op が却下より先に配信されていない",
+  );
+
+  // 本文とは1行空ける。理由の改行は潰して1却下1行にする。
+  const first = `なぜやるか\n\n却下 ${today()}「提案A」: スコープ外。 今回はやらない`;
+  assert.equal(board(db, boardId).nodes[goal]!.description, first, "墓標の書式が違う");
+
+  // 2件目からは墓標同士なので続けて並ぶ（間に空行を挟まない）。
+  apply(db, boardId, { type: "rejectNode", id: b, reason: "提案Aと重複" });
+  const second = `${first}\n却下 ${today()}「提案B」: 提案Aと重複`;
+  assert.equal(board(db, boardId).nodes[goal]!.description, second, "2件目の墓標が続けて並んでいない");
+
+  // 理由なし・空白だけの理由では Op が rejectNode の1つだけ（＝description を触らない）。
+  applyOne(db, boardId, { type: "rejectNode", id: c, reason: "   \n " });
+  applyOne(db, boardId, { type: "rejectNode", id: d });
+  assert.equal(board(db, boardId).nodes[goal]!.description, second, "理由なしの却下で description が変わった");
+  assertPositions(db, boardId, "理由つき却下のあと");
+});
+
+test("ルートの却下に理由は添えられない（追記先の親が無いので却下ごと止める）", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const root = addNode(db, boardId, { parentId: null, title: "提案された目的", kind: "goal", state: "proposed" });
+
+  assert.throws(
+    () => apply(db, boardId, { type: "rejectNode", id: root, reason: "この目的自体が要らない" }),
+    OpError,
+    "追記先が無いのに理由つきで却下できてしまった",
+  );
+  assert.notEqual(board(db, boardId).nodes[root], undefined, "エラーになったのにノードが消えている");
+
+  // 理由なしなら今まで通り却下できる。
+  applyOne(db, boardId, { type: "rejectNode", id: root });
+  assert.equal(board(db, boardId).nodes[root], undefined, "理由なしのルート却下ができていない");
+});
+
 test("unapproveNode は自分と子孫の確定済みを巻き込み、列から外し、completedAt を落とす（再承認で戻る）", (t) => {
   const { db, boardId, cleanup } = freshDb();
   t.after(cleanup);

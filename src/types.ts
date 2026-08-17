@@ -122,7 +122,11 @@ export type Intent =
   | { type: "approveNode"; id: string; recursive?: boolean }
   /** 承認の取り消し。子孫も必ず巻き込む（recursive の指定は無い）。 */
   | { type: "unapproveNode"; id: string }
-  | { type: "rejectNode"; id: string }
+  /**
+   * 提案をサブツリーごと削除する。reason を添えると親の description に墓標が1行残る。
+   * ルート（親が無い）に reason を添えると追記先が無いのでエラーになる。
+   */
+  | { type: "rejectNode"; id: string; reason?: string }
   // カンバン
   | { type: "moveCard"; id: string; listId: string; beforeId: BeforeId }
   | { type: "addList"; title: string; role?: ListRole; beforeId?: BeforeId }
@@ -170,6 +174,11 @@ export type Op =
   | { type: "approveNode"; entries: { id: string; listId: string; listIndex: number; completedAt: string | null }[] }
   /** 未承認に戻ったノード。カンバンから外れ、completedAt も落ちる。 */
   | { type: "unapproveNode"; ids: string[] }
+  /**
+   * 却下で消えたノード。ids は自分を含む子孫すべて。
+   * 理由は Op に載らない。親の description への追記として、この直前に
+   * setNodeDescription の Op が別途配信される（消える側に情報を積んでも読めないため）。
+   */
   | { type: "rejectNode"; ids: string[] }
   // カンバン
   | { type: "moveCard"; id: string; listId: string; listIndex: number; completedAt: string | null }
