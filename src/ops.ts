@@ -225,31 +225,32 @@ function placeholders(count: number): string {
   return new Array(count).fill("?").join(",");
 }
 
-// ---- 却下の墓標 -----------------------------------------------------------
-// 却下したノードは消えるので、理由は親の description に1行だけ残す。
-// 1却下＝1行に揃えてあるので、あとから grep でも目で追うのも楽になる。
+// ---- description に残すメモ -------------------------------------------------
+// 却下（消えるノードの理由 → 親に残す）と差し戻し（指摘 → 本人に残す）で共有する。
+// どちらも1操作＝1行に揃えてあるので、あとから grep でも目で追うのも楽になる。
+// 積もったメモは、AI が再レビューに出すときに description の本文へ畳んで消す運用。
 
-/** 墓標の行頭。既存の description の末尾がこの形なら、続けて書いて塊にする。 */
-const REJECT_MEMO_RE = /^却下 \d{4}-\d{2}-\d{2}「/;
+/** メモの行頭。既存の description の末尾がこの形なら、続けて書いて塊にする。 */
+const MEMO_RE = /^(却下|差し戻し) \d{4}-\d{2}-\d{2}[「:]/;
 
-/** 却下理由の正規化。1却下1行に保つため、改行は空白に潰す。 */
-function rejectionReason(value: unknown): string {
+/** メモ本文の正規化。1操作1行に保つため、改行は空白に潰す。 */
+function memoText(value: unknown): string {
   return trimmedText(value).replace(/\s*\n\s*/g, " ");
 }
 
-/** 墓標に添える日付。ローカル実行前提なのでサーバーのローカル日付で書く（UTC だと日本の朝が前日になる）。 */
+/** メモに添える日付。ローカル実行前提なのでサーバーのローカル日付で書く（UTC だと日本の朝が前日になる）。 */
 function todayLocal(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-/** 本文の末尾に墓標を足す。本文とは1行空け、墓標同士は続けて並べる。 */
+/** 本文の末尾にメモを足す。本文とは1行空け、メモ同士は続けて並べる。 */
 function appendMemo(description: string, memo: string): string {
   const body = description.trimEnd();
   if (!body) return memo;
   const lastLine = body.slice(body.lastIndexOf("\n") + 1);
-  return `${body}${REJECT_MEMO_RE.test(lastLine) ? "\n" : "\n\n"}${memo}`;
+  return `${body}${MEMO_RE.test(lastLine) ? "\n" : "\n\n"}${memo}`;
 }
 
 function touchNode(db: Db, id: string, now: string): void {
@@ -587,7 +588,7 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
       // 追記先を親にするのは、Claude Code が細分化の前に GET /tree で親の本文を読むから
       // （＝新しい API を増やさずに「前に何を却下したか」を渡せる）。
       const ops: Op[] = [];
-      const reason = rejectionReason(intent.reason);
+      const reason = memoText(intent.reason);
       if (reason) {
         if (node.parent_id === null) {
           // ルートには追記先が無い。黙って理由を捨てるのは「判断が消える」というこの機能の
@@ -627,6 +628,24 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
         writeOrder(db, "nodes", "list_pos", activeIdsInList(db, boardId, fromListId));
       }
       return [{ type: "moveCard", id: node.id, listId: toList.id, listIndex: placed.index, completedAt }];
+    }
+
+    case "sendBack": {
+      const node = requireNode(db, boardId, intent.id);
+      // 差し戻し先の既定は「やり直しキュー」＝ role="normal" の先頭列。
+      // listId を渡せば「差し戻し」列を作ってそこへ集める運用もできる。
+      const target = intent.listId === undefined ? defaultList(db, boardId) : requireList(db, boardId, intent.listId);
+      // 指摘は却下理由と違って**本人**の description に残す（ノードが消えないので）。
+      // 積もった分は、AI が再レビューに出すときに本文へ畳んで消す前提。
+      const note = memoText(intent.note);
+      const description = note ? appendMemo(node.description, `差し戻し ${todayLocal()}: ${note}`) : null;
+
+      // 末尾へ積む（承認や moveCard と同じ）。列の中の優先順位は人間が DnD で決める。
+      const ops = apply(db, boardId, { type: "moveCard", id: node.id, listId: target.id, beforeId: null });
+      if (description !== null) {
+        ops.push(...apply(db, boardId, { type: "setNodeDescription", id: node.id, description }));
+      }
+      return ops;
     }
 
     case "addList": {

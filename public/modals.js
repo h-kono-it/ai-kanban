@@ -467,6 +467,28 @@ function renderApprovedField(node) {
   unapprove.addEventListener("click", () => send({ type: "unapproveNode", id: node.id }));
   actions.append(unapprove);
 
+  // 人間待ちの列に居るときだけ［差し戻し］。レビューして「まだ直してほしい」を
+  // やり直しキューへ返す操作なので、それ以外の列では意味を持たない。
+  const list = listById(node.listId);
+  if (list && list.role === "awaiting_human") {
+    const sendBack = el("button", "popover-danger-btn", "差し戻し");
+    sendBack.type = "button";
+    sendBack.id = "detail-send-back-btn";
+    sendBack.title = "やり直しキューへ戻す（指摘は説明に残る）";
+    sendBack.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openConfirm({
+        key: `send-back:${node.id}`,
+        anchorSelector: "#detail-send-back-btn",
+        message: `「${node.title}」を差し戻しますか？「${sendBackTarget()}」へ戻します。`,
+        confirmLabel: "差し戻す",
+        reasonPlaceholder: "直してほしいこと（任意・説明に残ります）",
+        onConfirm: (note) => send({ type: "sendBack", id: node.id, note: note || undefined }),
+      });
+    });
+    actions.append(sendBack);
+  }
+
   if (alsoAffected > 0) {
     const note = el("span", null, `配下 ${alsoAffected} 件も一緒に戻ります`);
     note.style.cssText = "font-size:11px;color:#7d8590;align-self:center;";
@@ -475,6 +497,12 @@ function renderApprovedField(node) {
 
   field.append(actions);
   return field;
+}
+
+/** 差し戻し先の列名。サーバー側の既定（role="normal" の先頭列）と同じ選び方を文面に出す。 */
+function sendBackTarget() {
+  const target = board.lists.find((l) => l.role === "normal") ?? board.lists[0];
+  return target ? target.title : "先頭の列";
 }
 
 // ---------------------------------------------------------------------------

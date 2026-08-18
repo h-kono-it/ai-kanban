@@ -129,6 +129,12 @@ export type Intent =
   | { type: "rejectNode"; id: string; reason?: string }
   // カンバン
   | { type: "moveCard"; id: string; listId: string; beforeId: BeforeId }
+  /**
+   * 人間待ちの列からやり直しキューへ戻す（＝差し戻し）。note を添えると
+   * そのノード自身の description に指摘が1行残る。
+   * listId 省略時は role="normal" の先頭列。moveCard と setNodeDescription に展開される。
+   */
+  | { type: "sendBack"; id: string; listId?: string; note?: string }
   | { type: "addList"; title: string; role?: ListRole; beforeId?: BeforeId }
   | { type: "renameList"; id: string; title: string }
   | { type: "setListRole"; id: string; role: ListRole }

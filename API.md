@@ -172,6 +172,7 @@ curl -sX PATCH localhost:3000/api/boards/myboard/nodes/<nodeId> \
 | type | フィールド |
 |---|---|
 | `moveCard` | `id` `listId` `beforeId` — 列の移動＝ステータス変更。`role="done"` の列に入ると `completedAt` が入る（同じ列内の並べ替えでは元の時刻を維持） |
+| `sendBack` | `id` `listId?` `note?` — **差し戻し**。人間待ちの列からやり直しキューへ戻す。`listId` 省略時は `role="normal"` の先頭列の末尾へ。`note` を添えると**そのノード自身の `description`** に `差し戻し YYYY-MM-DD: 指摘` が1行残る（却下と違いノードは消えないので本人に書く）。`moveCard` と `setNodeDescription` の Op に展開される |
 | `addList` | `title` `role?` `beforeId?` |
 | `renameList` | `id` `title` |
 | `setListRole` | `id` `role` — 既存ノードの `completedAt` は動かさない。新しい role は次の `moveCard` から効く |

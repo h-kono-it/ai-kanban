@@ -51,6 +51,75 @@ test("done 列への出入りで completedAt が入る・消える", (t) => {
   assertPositions(db, boardId, "done 列の出入り");
 });
 
+test("sendBack はやり直しキューへ戻し、指摘を本人の description に残す", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const b0 = board(db, boardId);
+  const todo = listByRole(b0, "normal");
+  const review = listByRole(b0, "awaiting_human");
+
+  const id = addNode(db, boardId, { parentId: null, title: "ログイン画面を作る", description: "なぜやるか: 入口だから" });
+  apply(db, boardId, { type: "moveCard", id, listId: review.id, beforeId: null });
+
+  const ops = apply(db, boardId, { type: "sendBack", id, note: "エラー時の表示が無い。\n  テストも足りない" });
+  assert.deepEqual(
+    ops.map((o) => o.type),
+    ["moveCard", "setNodeDescription"],
+    "差し戻しは moveCard と setNodeDescription に展開されるはず",
+  );
+  assert.deepEqual(
+    whereIs(board(db, boardId), id),
+    { listTitle: todo.title, index: 0 },
+    "role=normal の先頭列へ戻っていない",
+  );
+
+  // 却下の墓標と同じ書式。ただし消えないノードなので本人に書く。
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const after = `なぜやるか: 入口だから\n\n差し戻し ${day}: エラー時の表示が無い。 テストも足りない`;
+  assert.equal(board(db, boardId).nodes[id]!.description, after, "指摘の書式が違う");
+
+  // 2回目は差し戻し行同士なので続けて並ぶ。指摘なしなら moveCard だけ。
+  apply(db, boardId, { type: "moveCard", id, listId: review.id, beforeId: null });
+  apply(db, boardId, { type: "sendBack", id, note: "まだ直っていない" });
+  assert.equal(
+    board(db, boardId).nodes[id]!.description,
+    `${after}\n差し戻し ${day}: まだ直っていない`,
+    "2件目の指摘が続けて並んでいない",
+  );
+
+  apply(db, boardId, { type: "moveCard", id, listId: review.id, beforeId: null });
+  const bare = applyOne(db, boardId, { type: "sendBack", id });
+  assert.equal(bare.type, "moveCard", "指摘なしなら moveCard の Op だけのはず");
+  assert.equal(
+    board(db, boardId).nodes[id]!.description,
+    `${after}\n差し戻し ${day}: まだ直っていない`,
+    "指摘なしの差し戻しで description が変わった",
+  );
+  assertPositions(db, boardId, "差し戻しのあと");
+});
+
+test("sendBack は列を指定でき、done 列から戻すと完了時刻が落ちる", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const b0 = board(db, boardId);
+  const done = listByRole(b0, "done");
+  const inProgress = listByTitle(b0, "進行中");
+
+  const id = addNode(db, boardId, { parentId: null, title: "タスク" });
+  apply(db, boardId, { type: "moveCard", id, listId: done.id, beforeId: null });
+  assert.notEqual(board(db, boardId).nodes[id]!.completedAt, null, "done 列で完了時刻が入っていない");
+
+  // 「これ完了じゃない」も差し戻し。moveCard に委ねているので completedAt は自動で落ちる。
+  apply(db, boardId, { type: "sendBack", id, listId: inProgress.id, note: "まだ動いていない" });
+  assert.deepEqual(whereIs(board(db, boardId), id), { listTitle: "進行中", index: 0 }, "指定した列へ戻っていない");
+  assert.equal(board(db, boardId).nodes[id]!.completedAt, null, "done 列を出たのに完了時刻が残っている");
+  assertPositions(db, boardId, "列を指定した差し戻し");
+});
+
 test("done 列内での並べ替えでは完了時刻が維持される", (t) => {
   const { db, boardId, cleanup } = freshDb();
   t.after(cleanup);
