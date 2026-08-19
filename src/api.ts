@@ -239,6 +239,9 @@ api.post("/boards/:id/nodes", async (c) => {
 /**
  * ノードの部分更新。渡されたフィールドだけを対応する Intent に分解して順に適用する。
  * - title / description / dueDate / kind … それぞれ単独の Intent。
+ * - appendDescription … 本文の末尾に1段落追記（全文を送らないので人間の編集を潰さない）。
+ * - clearNotes … true なら `却下` / `差し戻し` のメモ行だけを落とす。appendDescription と
+ *                組み合わせると「指摘を本文へ畳んで、メモ行を消す」が全文上書きなしで通る。
  * - parentId … ツリー上の移動（moveNode）。null ならルートへ。列は動かない。
  * - listId  … カンバン上の移動（moveCard）。ツリー上の親子関係は動かない。
  * - beforeId … 「この id の直前に置く」。parentId とセットなら兄弟順、listId とセットなら
@@ -260,6 +263,10 @@ api.patch("/boards/:id/nodes/:nodeId", async (c) => {
   const intents: Intent[] = [];
   if (has("title")) intents.push({ type: "renameNode", id: nodeId, title: String(body.title) });
   if (has("description")) intents.push({ type: "setNodeDescription", id: nodeId, description: String(body.description) });
+  // 追記と「メモ行だけ削除」は全文を送らずに済ませるための口。この順に並べるのは
+  // 「指摘を本文へ畳む → 畳み終えたメモ行を落とす」が1回の PATCH で通るようにするため。
+  if (has("appendDescription")) intents.push({ type: "appendNodeDescription", id: nodeId, text: String(body.appendDescription) });
+  if (body.clearNotes === true) intents.push({ type: "clearNodeNotes", id: nodeId });
   if (has("dueDate")) intents.push({ type: "setNodeDueDate", id: nodeId, dueDate: (body.dueDate ?? null) as string | null });
   if (has("kind")) intents.push({ type: "setNodeKind", id: nodeId, kind: body.kind as NodeKind });
   if (has("parentId")) {

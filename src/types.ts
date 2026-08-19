@@ -111,6 +111,16 @@ export type Intent =
   | { type: "addNode"; parentId: string | null; beforeId?: BeforeId; title: string; kind?: NodeKind; description?: string; listId?: string; state?: NodeState; dueDate?: string | null; assigneeIds?: string[] }
   | { type: "renameNode"; id: string; title: string }
   | { type: "setNodeDescription"; id: string; description: string }
+  /**
+   * description の末尾に1段落足す。全文を送らないので、人間が本文を編集中でも潰さない。
+   * 却下・差し戻しのメモ行が末尾にあってもその手前（本文の末尾）に入る。
+   */
+  | { type: "appendNodeDescription"; id: string; text: string }
+  /**
+   * 却下・差し戻しのメモ行だけを description から落とす（本文は触らない）。
+   * 指摘を本文へ畳んだあとの後始末。これも全文を送らない。
+   */
+  | { type: "clearNodeNotes"; id: string }
   | { type: "setNodeDueDate"; id: string; dueDate: string | null }
   | { type: "setNodeKind"; id: string; kind: NodeKind }
   | { type: "moveNode"; id: string; parentId: string | null; beforeId: BeforeId }

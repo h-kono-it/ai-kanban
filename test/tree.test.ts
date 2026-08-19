@@ -144,3 +144,61 @@ test("deleteNode はサブツリーごと消し、ids に子孫が全部載る",
   );
   assertPositions(db, boardId, "deleteNode 後");
 });
+
+test("appendNodeDescription は本文の末尾に足し、メモ行はいちばん下に残る", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const goal = addNode(db, boardId, { parentId: null, title: "目的", kind: "goal" });
+  const id = addNode(db, boardId, { parentId: goal, title: "タスク", description: "なぜやるか: 入口だから" });
+
+  // 差し戻しの指摘を1行積んでおく（sendBack と同じ形）。
+  apply(db, boardId, { type: "sendBack", id, note: "エラー時の表示が無い" });
+  const withNote = board(db, boardId).nodes[id]!.description;
+  const noteLine = withNote.split("\n").at(-1)!;
+  assert.match(noteLine, /^差し戻し \d{4}-\d{2}-\d{2}: エラー時の表示が無い$/, "前提の差し戻し行が作れていない");
+
+  // 追記は本文の末尾（メモ行より前）に入る。全文を送らないので人間の編集を潰さない。
+  const op = applyOne(db, boardId, { type: "appendNodeDescription", id, text: "エラー時は画面上部に赤帯で出す。" });
+  assert.equal(op.type, "setNodeDescription", "setNodeDescription の Op に化けるはず");
+  assert.equal(
+    board(db, boardId).nodes[id]!.description,
+    `なぜやるか: 入口だから\n\nエラー時は画面上部に赤帯で出す。\n\n${noteLine}`,
+    "追記がメモ行より下に入っている",
+  );
+
+  // 空文字は no-op（seq を進めない）。
+  assert.deepEqual(apply(db, boardId, { type: "appendNodeDescription", id, text: "  " }), [], "空の追記で Op が出ている");
+});
+
+test("clearNodeNotes はメモ行だけを落とし、本文には触らない", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const goal = addNode(db, boardId, { parentId: null, title: "目的", kind: "goal" });
+  const id = addNode(db, boardId, { parentId: goal, title: "タスク", description: "なぜやるか: 入口だから" });
+
+  // メモ行が無ければ no-op。
+  assert.deepEqual(apply(db, boardId, { type: "clearNodeNotes", id }), [], "メモが無いのに Op が出ている");
+
+  apply(db, boardId, { type: "sendBack", id, note: "指摘その1" });
+  apply(db, boardId, { type: "sendBack", id, note: "指摘その2" });
+  assert.equal(board(db, boardId).nodes[id]!.description.split("\n").length, 4, "差し戻し行が2本積まれていない");
+
+  const op = applyOne(db, boardId, { type: "clearNodeNotes", id });
+  assert.equal(op.type, "setNodeDescription", "setNodeDescription の Op に化けるはず");
+  assert.equal(board(db, boardId).nodes[id]!.description, "なぜやるか: 入口だから", "本文まで削れている");
+});
+
+test("却下の墓標も clearNodeNotes の対象になる（親に積まれた分を畳める）", (t) => {
+  const { db, boardId, cleanup } = freshDb();
+  t.after(cleanup);
+
+  const goal = addNode(db, boardId, { parentId: null, title: "目的", kind: "goal", description: "なぜやるか" });
+  const proposed = addNode(db, boardId, { parentId: goal, title: "提案", state: "proposed" });
+  apply(db, boardId, { type: "rejectNode", id: proposed, reason: "スコープ外" });
+  assert.equal(board(db, boardId).nodes[goal]!.description.split("\n").length, 3, "墓標が積まれていない");
+
+  applyOne(db, boardId, { type: "clearNodeNotes", id: goal });
+  assert.equal(board(db, boardId).nodes[goal]!.description, "なぜやるか", "墓標だけを落とせていない");
+});

@@ -253,6 +253,21 @@ function appendMemo(description: string, memo: string): string {
   return `${body}${MEMO_RE.test(lastLine) ? "\n" : "\n\n"}${memo}`;
 }
 
+/** description を「本文」と「末尾に積まれたメモ行」に割る。メモ行は末尾の連続した塊だけを見る。 */
+function splitNotes(description: string): { body: string; notes: string[] } {
+  const lines = description.trimEnd().split("\n");
+  const notes: string[] = [];
+  while (lines.length > 0 && MEMO_RE.test(lines[lines.length - 1]!)) notes.unshift(lines.pop()!);
+  return { body: lines.join("\n").trimEnd(), notes };
+}
+
+/** 本文の末尾に1段落足す（メモ行はいちばん下に残す）。全文を送らせないための組み立て。 */
+function appendParagraph(description: string, text: string): string {
+  const { body, notes } = splitNotes(description);
+  const merged = body ? `${body}\n\n${text}` : text;
+  return notes.length > 0 ? `${merged}\n\n${notes.join("\n")}` : merged;
+}
+
 function touchNode(db: Db, id: string, now: string): void {
   db.prepare("UPDATE nodes SET updated_at = ? WHERE id = ?").run(now, id);
 }
@@ -428,6 +443,27 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
       const description = typeof intent.description === "string" ? intent.description : "";
       db.prepare("UPDATE nodes SET description = ?, updated_at = ? WHERE id = ?").run(description, nowIso(), node.id);
       return [{ type: "setNodeDescription", id: node.id, description }];
+    }
+
+    case "appendNodeDescription": {
+      const node = requireNode(db, boardId, intent.id);
+      // 全文を送らせないための口。人間が本文を編集している最中でも、その内容を潰さない。
+      // 却下・差し戻しのメモ行より前（本文の末尾）に入るので、メモは常にいちばん下に残る。
+      const text = trimmedText(intent.text);
+      if (!text) return [];
+      const description = appendParagraph(node.description, text);
+      db.prepare("UPDATE nodes SET description = ?, updated_at = ? WHERE id = ?").run(description, nowIso(), node.id);
+      return [{ type: "setNodeDescription", id: node.id, description }];
+    }
+
+    case "clearNodeNotes": {
+      const node = requireNode(db, boardId, intent.id);
+      // 指摘を本文へ畳んだあとの後始末。本文には触らないので、appendNodeDescription と
+      // 組み合わせれば「畳んで消す」を全文上書きなしで通せる。
+      const { body, notes } = splitNotes(node.description);
+      if (notes.length === 0) return [];
+      db.prepare("UPDATE nodes SET description = ?, updated_at = ? WHERE id = ?").run(body, nowIso(), node.id);
+      return [{ type: "setNodeDescription", id: node.id, description: body }];
     }
 
     case "setNodeDueDate": {

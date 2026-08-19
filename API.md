@@ -137,6 +137,23 @@ curl -sX PATCH localhost:3000/api/boards/myboard/nodes/<nodeId> \
   -H 'content-type: application/json' -d '{"listId": "<レビュー待ちの列id>"}'
 ```
 
+### 6. 差し戻された指摘を畳んで、再レビューに出す
+
+差し戻されたタスクの `description` には `差し戻し YYYY-MM-DD: 指摘` が1行積まれています。直したら、
+**指摘を本文（仕様）に畳んでメモ行を落とし**、レビュー待ちへ戻します。1回の PATCH で通り、
+`description` の全文を送らないので**人間が本文を編集中でも潰しません**。
+
+```bash
+curl -sX PATCH localhost:3000/api/boards/myboard/nodes/<nodeId> \
+  -H 'content-type: application/json' -d '{
+    "appendDescription": "エラー時は画面上部に赤帯で出す（2026-08-18 の指摘）。",
+    "clearNotes": true,
+    "listId": "<レビュー待ちの列id>"
+  }'
+```
+
+`appendDescription` → `clearNotes` → `listId` の順に適用されます（畳んでから消して、最後に移動）。
+
 ---
 
 ## Intent リファレンス（`POST /ops` で使える全操作）
@@ -152,7 +169,9 @@ curl -sX PATCH localhost:3000/api/boards/myboard/nodes/<nodeId> \
 | `addNode` | `parentId`(必須,null可) `title`(必須) `beforeId?` `kind?` `description?` `listId?` `state?` `dueDate?` `assigneeIds?` |
 | `bulkAddNodes` | `parentId`(必須,null可) `nodes`(必須) `beforeId?` `state?`（既定 `proposed`） |
 | `renameNode` | `id` `title` |
-| `setNodeDescription` | `id` `description` |
+| `setNodeDescription` | `id` `description` — **全文の上書き**。人間が編集中なら後勝ちで潰すので、追記で済むなら下の2つを使う |
+| `appendNodeDescription` | `id` `text` — 本文の末尾に1段落追記。全文を送らないので競合しない。`却下` / `差し戻し` のメモ行が末尾にあっても、その**手前**（本文の末尾）に入る。`text` が空なら no-op |
+| `clearNodeNotes` | `id` — 末尾に積まれた `却下` / `差し戻し` のメモ行**だけ**を落とす（本文は触らない）。指摘を本文へ畳んだあとの後始末。メモが無ければ no-op。どちらも `setNodeDescription` の Op として配信される |
 | `setNodeDueDate` | `id` `dueDate`（`YYYY-MM-DD` または null） |
 | `setNodeKind` | `id` `kind` |
 | `moveNode` | `id` `parentId`(null可) `beforeId` — ツリー上の移動。**列は動かない** |
