@@ -93,3 +93,47 @@ button {
   cursor: pointer;
   font-size: 14px;
 }
+
+/* ---- アーカイブ ---- */
+
+/* 行の中の小さなボタン。作成フォームの button（緑・大きめ）とは別物。 */
+.archive-form {
+  display: inline;
+  margin: 0;
+}
+
+.archive-btn {
+  background: none;
+  border: 1px solid #30363d;
+  color: #7d8590;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.archive-btn:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.archived {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.archived > summary {
+  color: #7d8590;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 2px;
+}
+
+/* 畳んであるものなので、開いても本編より一段沈めて見せる。 */
+.archived .board-item {
+  opacity: 0.65;
+}
+
+.archived .board-list {
+  margin: 8px 0 0;
+}

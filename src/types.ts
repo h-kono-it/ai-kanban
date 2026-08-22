@@ -68,8 +68,14 @@ export interface Assignee {
   memberIds: string[];
 }
 
-/** ボード単位の設定。今は空。将来足すときに型エラーで気づけるよう never にしてある。 */
-export type BoardSettings = Record<string, never>;
+/**
+ * ボード単位の設定。setBoardSettings で浅くマージされ、Op で全体が配られる。
+ * archived: ホームの一覧から畳む（ボードは消えない。URL を直接叩けば開ける）。
+ *           false は持たず、畳むときだけ true を立てる（既定＝キーが無い）。
+ */
+export interface BoardSettings {
+  archived?: boolean;
+}
 
 /** WebSocket の {type:"state"} で丸ごと送られるボードの全体像。 */
 export interface BoardState {

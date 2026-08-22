@@ -567,3 +567,28 @@ header h1 {
   width: 100%;
   font-size: 13px;
 }
+
+/* ---- 完了列の「7日より前」 ---- */
+
+/* 完了列だけは完了時刻順に描き、古い分をここに畳む（kanban.js の splitDoneCards）。 */
+.older-cards > summary {
+  color: #7d8590;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 6px 2px;
+  list-style-position: inside;
+}
+
+.older-cards > summary:hover {
+  color: #58a6ff;
+}
+
+/* 畳んであるものなので、開いても直近のカードより一段沈めて見せる。 */
+.older-cards .cards {
+  margin-top: 6px;
+  min-height: 0;
+}
+
+.older-cards .card {
+  opacity: 0.7;
+}

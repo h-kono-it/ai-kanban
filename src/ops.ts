@@ -49,7 +49,9 @@ export function applyIntent(db: Db, boardId: string, intent: Intent): AppliedOp[
     const before = queryOne<{ seq: number }>(db, "SELECT seq FROM boards WHERE id = ?", boardId);
     if (!before) throw new OpError(`ボードが見つかりません: ${boardId}`);
     const base = Number(before.seq);
-    db.prepare("UPDATE boards SET seq = seq + ? WHERE id = ?").run(ops.length, boardId);
+    // 鮮度（boards.updated_at）もここで更新する。書き込みは必ずこの関数を通るので、
+    // 個々の case に散らすと必ず足し忘れる。
+    db.prepare("UPDATE boards SET seq = seq + ?, updated_at = ? WHERE id = ?").run(ops.length, nowIso(), boardId);
     return ops.map((op, i) => ({ seq: base + i + 1, op }));
   });
 }
@@ -66,6 +68,13 @@ const LIST_ROLES: ListRole[] = ["normal", "awaiting_human", "done"];
 /** REST 経由の JSON は型が保証されないので、文字列以外は空文字（＝no-op）に倒す。 */
 function trimmedText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** 知っているキーだけを型どおりに拾う。未知のキーと壊れた値は落とす。 */
+function normalizeSettings(value: Record<string, unknown>): BoardSettings {
+  const settings: BoardSettings = {};
+  if (value.archived === true) settings.archived = true;
+  return settings;
 }
 
 function normalizeKind(value: NodeKind | undefined): NodeKind {
@@ -828,7 +837,8 @@ function apply(db: Db, boardId: string, intent: Intent): Op[] {
       const row = queryOne<{ settings: string }>(db, "SELECT settings FROM boards WHERE id = ?", boardId);
       if (!row) throw new OpError(`ボードが見つかりません: ${boardId}`);
       // 浅くマージして保存し、Op にはマージ後の全体を入れる（クライアントは差分を持たない）。
-      const merged = { ...parseSettings(row.settings), ...(intent.settings ?? {}) } as BoardSettings;
+      // REST から任意の JSON が来るので、知っているキーだけを型どおりに拾う。
+      const merged = normalizeSettings({ ...parseSettings(row.settings), ...(intent.settings ?? {}) });
       db.prepare("UPDATE boards SET settings = ? WHERE id = ?").run(JSON.stringify(merged), boardId);
       return [{ type: "setBoardSettings", settings: merged }];
     }

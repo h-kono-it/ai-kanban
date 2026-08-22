@@ -97,18 +97,41 @@ export interface BoardSummary {
   id: string;
   title: string;
   createdAt: string;
+  /** 最後に書き込みが通った時刻。一度も書き込まれていないボードは createdAt と同じ。 */
+  updatedAt: string;
   nodeCount: number;
+  /** true ならホームの一覧から畳む（ボードは消えない）。 */
+  archived: boolean;
 }
 
+/**
+ * ボード一覧。**最終更新の新しい順**で返す（作成順ではない）。
+ * 複数ボードを行き来する使い方だと、直近に触ったものが上に来る方が探す手間が小さい。
+ * archived も含めて返すので、畳むかどうかは呼び出し側（ホーム画面）が決める。
+ */
 export function listBoards(db: Db): BoardSummary[] {
-  const rows = queryAll<{ id: string; title: string; created_at: string; node_count: number }>(
+  const rows = queryAll<{
+    id: string;
+    title: string;
+    created_at: string;
+    updated_at: string | null;
+    settings: string;
+    node_count: number;
+  }>(
     db,
-    `SELECT b.id, b.title, b.created_at, COUNT(n.id) AS node_count
+    `SELECT b.id, b.title, b.created_at, b.updated_at, b.settings, COUNT(n.id) AS node_count
        FROM boards b LEFT JOIN nodes n ON n.board_id = b.id
       GROUP BY b.id
-      ORDER BY b.created_at`,
+      ORDER BY COALESCE(b.updated_at, b.created_at) DESC, b.created_at DESC`,
   );
-  return rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at, nodeCount: Number(r.node_count) }));
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at ?? r.created_at,
+    nodeCount: Number(r.node_count),
+    archived: parseSettings(r.settings).archived === true,
+  }));
 }
 
 export function boardExists(db: Db, boardId: string): boolean {

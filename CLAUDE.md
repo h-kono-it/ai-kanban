@@ -30,7 +30,7 @@ Cloudflare Workers + Durable Object 版の [my-kanban](../my-kanban) が前身�
 単一の Node プロセス（Hono）+ SQLite ファイル1つ（`node:sqlite`、依存ゼロ）。
 
 - `src/types.ts` — **ドメイン型と同期プロトコルの正本**。`Intent`（クライアント→サーバーの意図）と `Op`（サーバー→クライアントの適用結果）を分けて定義している。
-- `src/db.ts` / `src/schema.sql` — 接続（WAL + `foreign_keys=ON`）と DDL。`transact()` でトランザクションを張る。
+- `src/db.ts` / `src/schema.sql` — 接続（WAL + `foreign_keys=ON`）と DDL。`transact()` でトランザクションを張る。**`schema.sql` は `CREATE TABLE IF NOT EXISTS` なので、既存のテーブルに列は増えません。**後から列を足すときは `schema.sql`（新規 DB 用）と `db.ts` の `migrate()` 内の `addColumn()`（既存 DB 用）の**両方**に書くこと。片方だけだと、手元では動いて他人の DB で落ちます。
 - `src/store.ts` — 読み取りとボードの初期化。`loadBoard()` は 6 クエリでボード1つ分を丸ごと組み立てる（N+1 を作らない）。
 - `src/ops.ts` — **すべての書き込みが通る唯一の場所**。`applyIntent()` が意図を1つ適用し、正規化済みの `Op` と採番済み `seq` を返す。
 - `src/hub.ts` — WebSocket 接続の管理と `applyAndBroadcast()`。
@@ -65,6 +65,7 @@ interface TaskNode {
 }
 ```
 
+- **完了列（`role="done"`）だけ並びの意味が違う。** ToDo や進行中は「これからやる順」で手動の順序（`list_pos`）に意味がありますが、完了列は「済んだ記録」なので `completedAt` の**新しい順**で描き、**7日より古い分は畳みます**（`public/kanban.js` の `splitDoneCards`）。`list_pos` は書き換えずに**描画時に無視するだけ**なので、やめたければ描画側を戻すだけで済みます。列内での並べ替えは必ず元の位置に戻ってしまうため、完了列への**同じ列からの drop は意図を送らず捨てます**（「動かしても戻る」を作らないため）。完了時刻の無いカード（`setListRole` で後から `done` にした列に居るとこうなる）は畳まず新しい側の末尾に置きます — 説明のつかないものを隠すと「完了列にしたらカードが消えた」に見えるからです。
 - **カンバンに並ぶのは葉ノードだけ**（`childIds.length === 0`）。親は「箱」であってカードではないので、子を1つ足した瞬間その親はカンバンから消えます。この絞り込みは**クライアント側の描画時**に行っています（`lists[].nodeIds` にはその列にいる active なノードが親子を問わず載る）。
 - 順序は2系統あって独立に動きます: ツリー上の兄弟順（`tree_pos`）とカンバン列内の順序（`list_pos`）。どちらもグループ内 0..n-1 の連番で、移動のたびに再採番する素朴な方式です。
 - 完了判定は**列 id ではなく `role === "done"`** で行います（旧 my-kanban は `"done"` という id をハードコードしていた）。
@@ -118,6 +119,10 @@ AI に作業させる前提なので、人間が止めるポイントが2種類�
 - モジュール構成: `state.js`（状態と `applyOp`、他の `public/*.js` を import しない）← `ws.js` / `kanban.js` / `tree.js` / `modals.js` ← `app.js`。循環を避けるため、再描画は `state.js` の `onRender()` / `rerender()` フック経由で行います。
 
 ## Known gaps
+
+ボードの鮮度は `boards.updated_at` に入り、**`applyIntent()` が `seq` を進めるのと同じ場所**で更新されます（個々の case に散らすと必ず足し忘れるため）。ホームの一覧はこれの新しい順です。ボードは`settings.archived` で一覧から畳めますが、**消えるわけではなく URL を直接叩けば開けます**。アーカイブの操作はホームのフォーム POST（`POST /:id/archive`）で、中身は `setBoardSettings` の Intent なのでそのボードを開いている画面にも Op として届きます。
+
+サーバーのログは **stdout/stderr に出すだけ**で、ファイルへの振り分けもローテーションもしません（常駐させるときは launchd の `StandardOutPath` / `StandardErrorPath` に任せる、と 2026-08-22 に決めました）。依存ゼロ・ビルドなしという前提を崩してまでログ機構を自前で持つ価値がないためです。起動時の1行に**ポート・DB の絶対パス・認証の有無**を出しているので、常駐中でも「どの DB を掴んでいるか」は分かります。
 
 期限通知（Discord）と完了ノードの自動削除は**未実装**（旧 my-kanban にはあった）。親ステータスの自動ロールアップも無く、ツリーに `3/7` の進捗を出すだけです。コメント・変更履歴は無し。モバイル未対応。認証はデプロイ全体で共有の `PASSPHRASE` 1本（未設定なら認証なし）。
 

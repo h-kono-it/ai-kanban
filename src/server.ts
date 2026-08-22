@@ -5,7 +5,7 @@
 // 一番上に置くこと（ESM の import は記述順に評価される）。
 import "./env.ts";
 
-import { relative } from "node:path";
+import { relative, resolve } from "node:path";
 import type { Server } from "node:http";
 import type { Duplex } from "node:stream";
 import type { IncomingMessage } from "node:http";
@@ -18,7 +18,7 @@ import { getCookie, setCookie } from "hono/cookie";
 import type { WebSocket } from "ws";
 import { api, isReservedBoardId } from "./api.ts";
 import { AUTH_COOKIE, isCorrectPassphrase, isValidSession, safeNext, sessionToken } from "./auth.ts";
-import { getDb } from "./db.ts";
+import { DEFAULT_DB_PATH, getDb } from "./db.ts";
 import { addSocket, applyAndBroadcast, createWebSocketServer, removeSocket, sendState, sendTo } from "./hub.ts";
 import { OpError } from "./ops.ts";
 import { boardExists, ensureBoard, listBoards } from "./store.ts";
@@ -147,6 +147,20 @@ app.post("/", async (c) => {
   return c.redirect(`/${id}`, 302);
 });
 
+// ホームの［アーカイブ］ボタン。JS を持ち込まないので普通のフォーム POST + リダイレクト。
+// 書き込みは applyAndBroadcast を通す（archived は BoardState の settings に載るので、
+// そのボードを開いている画面にも Op として届く）。
+app.post("/:id/archive", boardIdGuard, async (c) => {
+  const db = getDb();
+  const id = c.req.param("id") ?? "";
+  if (!boardExists(db, id)) return c.notFound();
+  const body = await c.req.parseBody();
+  const archived = body.archived === "1";
+  // archived:false は持たせない（既定はキーが無い状態）。戻すときは undefined を送る。
+  applyAndBroadcast(db, id, { type: "setBoardSettings", settings: { archived: archived || undefined } });
+  return c.redirect("/", 302);
+});
+
 // URL を訪問したら暗黙にボードができる（旧 my-kanban と同じ挙動）。
 app.get("/:id", boardIdGuard, (c) => {
   // boardIdGuard を通っている時点で必ず値があるが、型の上では optional なので畳んでおく。
@@ -164,7 +178,13 @@ const port = Number(process.env.PORT ?? 3000);
 // serve() が返すのは http.Server（http2 系を使う設定にしていないため）。
 // upgrade イベントを自前で扱いたいのでキャストする。@hono/node-ws は依存の都合で使わない。
 const server = serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`ai-kanban listening on http://localhost:${info.port}`);
+  // 常駐させると、この行が「どの DB を掴んでいるか」を知る唯一の手がかりになる。
+  // 出力先はプロセスの stdout/stderr のまま（ファイルへの振り分けは launchd に任せる）。
+  console.log(
+    `ai-kanban listening on http://localhost:${info.port}` +
+      ` (db: ${resolve(process.env.DB_PATH ?? DEFAULT_DB_PATH)},` +
+      ` auth: ${process.env.PASSPHRASE ? "on" : "off"})`,
+  );
 }) as Server;
 
 const wss = createWebSocketServer();

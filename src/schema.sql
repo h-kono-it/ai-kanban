@@ -7,7 +7,11 @@ CREATE TABLE IF NOT EXISTS boards (
   -- 差分同期の通し番号。mutation を1つ適用するたびに 1 増える。
   seq        INTEGER NOT NULL DEFAULT 0,
   settings   TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  -- 最後に書き込みが通った時刻。applyIntent が seq を進めるのと同じ場所で更新する
+  -- （書き込みは必ずそこを通るので、ここだけ見ればボードの鮮度が分かる）。
+  -- 既存 DB には db.ts の addColumn() が後から足すので、NOT NULL にはできない。
+  updated_at TEXT
 );
 
 -- カンバンの列 = ステータス。

@@ -60,7 +60,7 @@ nodes（単一ツリー）
 
 | メソッド | パス | 内容 |
 |---|---|---|
-| `GET` | `/api/boards` | ボード一覧 |
+| `GET` | `/api/boards` | ボード一覧。**最終更新の新しい順**。各件に `updatedAt`（最後に書き込みが通った時刻）と `archived` が入る。アーカイブ済みも含めて返すので、畳むかどうかは呼び出し側が決める |
 | `GET` | `/api/boards/:id` | ボードの全体像（`BoardState`。列・ノード・担当者すべて） |
 | `GET` | `/api/boards/:id/tree` | **入れ子 JSON**。`?node=<id>` で部分木、`?depth=<n>` で階層数を制限（`depth=1` はルートのみ） |
 | `GET` | `/api/boards/:id/goals` | `kind="goal"` のノード。`?undecomposed=1` で**まだ子を持たない目的**だけ＝これから細分化すべきもの |
@@ -214,7 +214,7 @@ curl -sX PATCH localhost:3000/api/boards/myboard/nodes/<nodeId> \
 | type | フィールド |
 |---|---|
 | `renameBoard` | `title` |
-| `setBoardSettings` | `settings` |
+| `setBoardSettings` | `settings` — 浅くマージされ、Op にはマージ後の全体が載る。知らないキーと型が違う値は捨てられる。今あるのは `archived`（true でホームの一覧から畳む。**ボードは消えず URL を直接叩けば開ける**）だけ。戻すときは `{"archived": null}` のように true 以外を送る |
 
 ---
 

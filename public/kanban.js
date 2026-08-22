@@ -27,6 +27,16 @@ import { send } from "./ws.js";
 let suppressNextCardClick = false;
 
 /**
+ * 完了列の「7日より前」を開いている列の id。
+ * 全再描画で DOM ごと作り直すので、<details> の開閉はここに持って復元する
+ * （他クライアントの Op が1つ届いただけで畳み直されるのを避ける）。
+ */
+const openedOlder = new Set();
+
+/** これより古い完了は畳む。振り返りの単位が「日」なので、件数ではなく日数で切る。 */
+const OLDER_THAN_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * カンバンを root（#view-root）の中に描く。root を空にするのは呼び出し側（app.js）の責務。
  * board.css の #lists がカードの列を横並びにする。
  */
@@ -98,16 +108,26 @@ function renderList(list, scoped) {
     nodes.push(node);
   }
 
+  // 完了列だけは並びの意味が違う。ToDo や進行中は「これからやる順」で人が決める順序に
+  // 意味があるが、完了列は「済んだ記録」なので時間軸しか意味を持たない。
+  // list_pos（＝手で並べた順）は無視して完了時刻の新しい順に描き、古い分は畳む。
+  const isDone = list.role === "done";
+  const { recent, older } = isDone ? splitDoneCards(nodes) : { recent: nodes, older: [] };
+
   listEl.append(renderListHeader(list, nodes.length));
 
   const cardsEl = el("div", "cards");
   cardsEl.dataset.listId = list.id;
-  for (const node of nodes) cardsEl.append(renderCard(node));
+  for (const node of recent) cardsEl.append(renderCard(node));
+  if (older.length > 0) cardsEl.append(renderOlderCards(list, older));
 
   cardsEl.addEventListener("dragover", (e) => {
     if (!e.dataTransfer.types.includes("text/plain")) return;
     e.preventDefault();
     e.stopPropagation();
+    // drop を捨てる組み合わせ（完了列の中での並べ替え）では、受け入れる素振りを見せない。
+    // dragover では payload を読めないので、掴まれているカードが自分の列に居るかで見分ける。
+    if (isDone && cardsEl.querySelector(".card.dragging")) return;
     listEl.classList.add("drag-over");
   });
   cardsEl.addEventListener("dragleave", () => listEl.classList.remove("drag-over"));
@@ -118,6 +138,14 @@ function renderList(list, scoped) {
     listEl.classList.remove("drag-over");
     const payload = readPayload(e);
     if (!payload || payload.kind !== "card") return;
+    if (isDone) {
+      // 完了列は完了時刻順に描くので、列内で並べ替えても必ず元の位置に戻る。
+      // 意図だけ飛んで画面が動かない（＝壊れて見える）ので、同じ列への drop は捨てる。
+      const dragged = nodeById(payload.id);
+      if (dragged && dragged.listId === list.id) return;
+      send({ type: "moveCard", id: payload.id, listId: list.id, beforeId: null });
+      return;
+    }
     send({ type: "moveCard", id: payload.id, listId: list.id, beforeId: beforeIdFromY(cardsEl, e.clientY) });
   });
   listEl.append(cardsEl);
@@ -166,7 +194,7 @@ function renderListHeader(list, count) {
   }
 
   const countEl = el("span", null, String(count));
-  countEl.title = "表示中のカード数";
+  countEl.title = "この列のカード数（折りたたんだ分も含む）";
   countEl.style.cssText = "font-size:11px;color:#7d8590;";
   left.append(countEl);
 
@@ -295,6 +323,46 @@ function matchesFilter(node) {
 // 絞り込みで一部のカードを出していなくても、サーバーが実データ上の正しい位置に解決できる。
 
 /** ポインタより下にある最初のカードの id。無ければ null（＝末尾）。 */
+/**
+ * 完了列のカードを「直近7日」と「それより前」に割る。
+ * 並びは完了時刻の新しい順。完了時刻が無いカード（setListRole で後から done にした列に
+ * 居るとこうなる）は畳まず、新しい側の末尾に置く — 「完了列にしたらカードが消えた」に
+ * 見えるのが一番たちが悪いので、説明のつかないものは隠さない。
+ */
+function splitDoneCards(nodes) {
+  const sorted = [...nodes].sort((a, b) => {
+    if (!a.completedAt) return b.completedAt ? 1 : 0;
+    if (!b.completedAt) return -1;
+    return a.completedAt < b.completedAt ? 1 : a.completedAt > b.completedAt ? -1 : 0;
+  });
+  const boundary = Date.now() - OLDER_THAN_MS;
+  const recent = [];
+  const older = [];
+  for (const node of sorted) {
+    const at = node.completedAt ? Date.parse(node.completedAt) : NaN;
+    (Number.isNaN(at) || at >= boundary ? recent : older).push(node);
+  }
+  return { recent, older };
+}
+
+/** 「7日より前」の畳んだ塊。開閉は openedOlder に控えて再描画で復元する。 */
+function renderOlderCards(list, older) {
+  const details = el("details", "older-cards");
+  details.open = openedOlder.has(list.id);
+  const summary = el("summary", null, `7日より前の完了 ${older.length} 件`);
+  details.append(summary);
+  const inner = el("div", "cards");
+  for (const node of older) inner.append(renderCard(node));
+  details.append(inner);
+  details.addEventListener("toggle", () => {
+    if (details.open) openedOlder.add(list.id);
+    else openedOlder.delete(list.id);
+  });
+  // 列自体のドラッグに拾われないように（.card の dragstart と同じ理由）。
+  summary.addEventListener("dragstart", (e) => e.preventDefault());
+  return details;
+}
+
 function beforeIdFromY(cardsEl, clientY) {
   for (const cardEl of cardsEl.querySelectorAll(".card:not(.dragging)")) {
     const rect = cardEl.getBoundingClientRect();
